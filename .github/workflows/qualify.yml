@@ -51,7 +51,7 @@ jobs:
           echo "TOKA=$sdk/bin/toka" >> "$GITHUB_ENV"
           echo "TOKAC=$sdk/bin/tokac" >> "$GITHUB_ENV"
           echo "TOKA_LIB=$sdk/lib" >> "$GITHUB_ENV"
-          echo "CC=$(xcrun --find clang)" >> "$GITHUB_ENV"
+          echo "CC=xcrun --sdk macosx clang" >> "$GITHUB_ENV"
 
       - name: Verify macOS frameworks
         run: |

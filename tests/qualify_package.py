@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -199,10 +200,12 @@ def assert_framework_linkage(program: Path, env: dict[str, str]) -> None:
 
 
 def compile_appkit_smoke(work: Path, env: dict[str, str]) -> None:
-    compiler = env.get("CC") or run(["xcrun", "--find", "clang"], cwd=PACKAGE, env=env).stdout.strip()
+    compiler = shlex.split(env["CC"]) if env.get("CC") else [
+        run(["xcrun", "--find", "clang"], cwd=PACKAGE, env=env).stdout.strip()
+    ]
     sdk = run(["xcrun", "--show-sdk-path"], cwd=PACKAGE, env=env).stdout.strip()
     program = work / "appkit_smoke"
-    run([compiler, "-Wall", "-Wextra", "-Werror", "-isysroot", sdk,
+    run([*compiler, "-Wall", "-Wextra", "-Werror", "-isysroot", sdk,
          str(PACKAGE / "tests" / "appkit_smoke.m"),
          "-framework", "AppKit", "-framework", "Metal", "-framework", "QuartzCore",
          "-o", str(program)], cwd=PACKAGE, env=env)
