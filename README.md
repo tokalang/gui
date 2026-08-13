@@ -1,21 +1,128 @@
-# `official/gui`
+# `official/gui` v0.1.0
 
-Standalone home for Toka's official GUI package.
+`official/gui` is Toka's macOS GUI vertical slice. It owns an Objective-C
+`NSWindow` behind a Toka `Window`, attaches a `CAMetalLayer`, provides a
+single-event non-blocking `App::pump`, coalesces redraw requests, clears the
+surface through a Metal command buffer, and draws one normalized-coordinate
+rectangle primitive.
 
-## Migration status
+This is deliberately not a widget toolkit. Its purpose is to qualify the
+package/build/FFI/resource path needed before retained UI state, rendering, and
+text input are designed.
 
-This repository is a migration scaffold and is not yet the canonical package
-source. Until standalone qualification, release, and registry consumer replay
-are complete, the authoritative source remains
-[`tokalang/toka/official/gui`](https://github.com/tokalang/toka/tree/main/official/gui).
+## Repository boundary and provenance
 
-Cutover will be one-way. The compiler repository copy will be removed after a
-successful standalone release; this repository will not become a long-lived
-mirror or submodule. GUI qualification must use an explicit installed SDK or
-`TOKA`, `TOKAC`, and `TOKA_LIB` inputs.
+This repository is the standalone home for Toka's official GUI package. It
+owns the package sources, native bridge, package example, and package
+qualification tests present here. Compiler-repository demos and product-level
+patches remain outside this repository.
+
+The package history was imported with
+`git subtree split --prefix=official/gui` from
+[`tokalang/toka@490068c9`](https://github.com/tokalang/toka/tree/490068c96ba5412456215a70373f31a6cb1e2048/official/gui).
+Until standalone qualification, release, and registry consumer replay are
+complete, that Toka snapshot remains the authoritative package source. Cutover
+will be one-way: the compiler-repository copy will then be removed rather than
+maintained as a mirror or submodule. Qualification must use an explicit
+installed SDK or `TOKA`, `TOKAC`, and `TOKA_LIB` inputs.
+
+## Guarantees
+
+- `Window` never exposes its Objective-C handle through the public Toka API.
+- `Window` is `@Encap` and exposes no public clone method; its native handle
+  cannot be copied or accessed outside the package. Explicit `close` and
+  deterministic `drop` close and release the native window exactly once.
+- `Window` is intentionally not `@Send`: AppKit and Metal state stays on its
+  creator thread and cannot be transferred to `thread_spawn`.
+- A successful `Window::open` has a system Metal device and `CAMetalLayer`.
+- `Window::redraw` submits a Metal clear pass; it does not execute arbitrary
+  shader code or retain a drawing command list.
+- `Window::fill_rect` draws one rectangle using a private Metal pipeline. Its
+  `x`, `y`, `width`, and `height` use a top-left normalized coordinate space.
+- `begin_frame`, `frame_rect`, and `end_frame` let a caller submit multiple
+  rectangles in one Metal command buffer and present them together.
+- `frame_text` submits one static UTF-8 string as an alpha-blended texture in
+  the current frame. Its `size` is normalized to the current window height.
+- `push_clip` and `pop_clip` provide nested normalized clip regions for the
+  active frame; each nested region intersects its parent and is enforced by
+  Metal's scissor state.
+- `frame_image` loads a local raster image through macOS's image decoder and
+  submits it as an alpha-blended texture in the active frame.
+- `add_svg_icon` and `frame_svg_icon` make SVG icon intent explicit while using
+  the same macOS image decoder. Decoded images are cached per window and path;
+  `clear_image_cache` invalidates that cache after a file update.
+- `Scene` is a Toka-owned retained rectangle, image, and text node list. It
+  renders strictly in `add_*` call order, preserving painter's order across
+  primitive kinds. Text and image paths are copied into the scene.
+- `Layout::row_weighted` and `column_weighted` divide a `Bounds` by positive
+  relative weights without consuming the input weight vector.
+- `Window::size` reports the content size in points; `resize` changes that
+  size and coalesces one redraw request so callers can recompute layout.
+- `Container` owns ordered child nodes in coordinates local to its parent.
+  Containers can nest, and `clip = true` limits descendants to the composed
+  container bounds.
+- `VirtualList::visible` calculates an overscanned `[first, last_exclusive)`
+  range and `item_bounds` places only those rows for a caller-managed scroll
+  offset. `Scrolled` events report macOS wheel deltas in `Event.x` and
+  `Event.y`.
+- Pointer events use normalized coordinates with a top-left origin, matching
+  `Bounds`. `ScrollState` clamps a caller-owned offset, `FocusState` owns a
+  stable integer focus id, and `ButtonState` implements hover, press, and
+  click transitions from typed pointer events.
+- `ToggleState` flips only after a press/release inside its bounds.
+  `ShortcutMap` dispatches a `KeyDown` to a caller-owned action id by physical
+  key code and modifier bitmask; use `Modifiers::shift/control/option/command`
+  to construct those masks.
+- `Window::poll_text` is separate from physical `KeyDown`: it yields committed
+  UTF-8 text, IME composition updates, and composition-clear events from a
+  macOS `NSTextInputClient` first responder. The caller owns cursor, selection,
+  and document mutation state.
+- `Scrollbar::thumb` derives a thumb bounds from `ScrollState`; `drag_to`
+  maps a pointer position back to a clamped offset. `ShortcutMap::bind_in_scope`
+  lets a focus scope override a global chord, with global bindings as fallback.
+- `TextSelection` tracks caller-owned Unicode-scalar anchor/active positions,
+  not UTF-8 byte offsets. `official/gui/text::GraphemeSelection` is a pure,
+  headless adapter over `official/unicode`: it maps scalar selections only at
+  extended-grapheme boundaries, maps grapheme positions to UTF-8 byte offsets,
+  and returns zero-copy selected text. `TextEditor` is a headless single-buffer
+  model with grapheme insert, replace, delete, and cursor/selection commands.
+  Neither type implements IME policy, shaping, or bidi layout. `copy_text` and
+  `paste_text` bridge UTF-8 strings to the macOS clipboard.
+- `Layout::inset`, `row`, and `column` return composable `Bounds` values, so
+  callers can build nested layouts without native callbacks or DOM state.
+- `Window::poll_event` returns typed `Shown`, pointer, keyboard, resize, and
+  close-request events from a bounded per-window queue.
+- `Window::request_redraw` and `take_redraw_request` coalesce repeated state
+  updates into one application-loop render opportunity; showing or resizing a
+  window also requests one redraw.
+
+## Non-goals
+
+- Linux and Windows backends.
+- Texture atlases, hot-reload file watching, or cross-window image caches.
+- Scrollbar visuals, inertial scrolling, text selection/cursor editing, and
+  nested shortcut-scope propagation.
+- Text shaping/line breaking, Unicode text editing, accessibility, or a framework-owned
+  unbounded application loop.
+
+## Qualification
+
+After building Toka, run `python3 official/gui/tests/qualify_macos_spike.py`.
+The test requires a logged-in macOS desktop session because it creates and
+closes an AppKit window. Set `TOKA_GUI_BUILD_BIN` when the tool binaries are
+not in `build/bin`.
+
+`examples/settings.tk` is the reference application. It uses only public GUI
+APIs to compose bounded event waiting, redraw scheduling, toggle input,
+shortcuts, and a clipped virtual list. The qualification suite type-checks it
+through a copied consumer package; run it manually from a desktop session to
+exercise its interactive loop.
+
+`App` and `Window` are UI-thread-affine values. Neither can be transferred to
+`thread_spawn`; background work must return data through an explicit message
+channel.
 
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE). Migrated native dependencies and
 assets must retain their applicable third-party notices and licenses.
-Official GUI package for Toka
