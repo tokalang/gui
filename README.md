@@ -13,18 +13,22 @@ text input are designed.
 ## Repository boundary and provenance
 
 This repository is the standalone home for Toka's official GUI package. It
-owns the package sources, native bridge, package example, and package
-qualification tests present here. Compiler-repository demos and product-level
-patches remain outside this repository.
+owns the package sources, native bridge, package example, qualification tests,
+and the imported editor and settings demos under `demos/`. Product-level
+patches remain outside this repository. The deterministic release archive
+contains only the package allowlist and deliberately excludes the demos. The
+demos select `gui@0.1.0`; they are not executable during release preparation.
+Their immutable locks and CI qualification are added only after the package is
+live in the public catalog.
 
 The package history was imported with
 `git subtree split --prefix=official/gui` from
 [`tokalang/toka@490068c9`](https://github.com/tokalang/toka/tree/490068c96ba5412456215a70373f31a6cb1e2048/official/gui).
-Until standalone qualification, release, and registry consumer replay are
-complete, that Toka snapshot remains the authoritative package source. Cutover
-will be one-way: the compiler-repository copy will then be removed rather than
-maintained as a mirror or submodule. Qualification must use an explicit
-installed SDK or `TOKA`, `TOKAC`, and `TOKA_LIB` inputs.
+The imported Toka snapshot remains the authoritative source until the
+standalone `0.1.0` release and public registry consumer replay are complete.
+Cutover is one-way: the compiler-repository copy will then be removed rather
+than maintained as a mirror or submodule. The package locks its Unicode text
+dependency to the independently released registry package `unicode@0.1.1`.
 
 ## Guarantees
 
@@ -107,10 +111,25 @@ installed SDK or `TOKA`, `TOKAC`, and `TOKA_LIB` inputs.
 
 ## Qualification
 
-After building Toka, run `python3 official/gui/tests/qualify_macos_spike.py`.
-The test requires a logged-in macOS desktop session because it creates and
-closes an AppKit window. Set `TOKA_GUI_BUILD_BIN` when the tool binaries are
-not in `build/bin`.
+With a built Toka source checkout, run:
+
+```text
+TOKA_ROOT=/path/to/toka python3 tests/qualify_package.py
+python3 tools/build_release.py --output /tmp/gui-0.1.0.tar.gz
+```
+
+An installed SDK can be supplied with all three of `TOKA`, `TOKAC`, and
+`TOKA_LIB` instead. Qualification resolves the exact public
+`unicode@0.1.1` release, verifies its immutable archive and content hashes,
+then deletes the unpacked dependency and build outputs and rebuilds offline
+from only the cached archive. It also compiles both GUI smoke programs,
+rebuilds the native Objective-C object, checks AppKit/Metal/QuartzCore linkage,
+and runs an AppKit framework smoke that does not require a GPU.
+
+Real window creation and Metal rendering require a logged-in macOS desktop
+with an available Metal device. Set `TOKA_GUI_DESKTOP_SMOKE=1` only in such an
+environment; hosted CI treats this as separate evidence and does not claim a
+rendering pass when it is unavailable.
 
 `examples/settings.tk` is the reference application. It uses only public GUI
 APIs to compose bounded event waiting, redraw scheduling, toggle input,

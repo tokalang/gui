@@ -1,14 +1,17 @@
 # Toka GUI settings demo
 
-Requires macOS, a logged-in desktop session, and a Toka build with the GUI
-native-framework support.
+After `gui@0.1.0` is live in the public catalog, this demo requires macOS, a
+logged-in desktop session with Metal available, and an installed Toka
+`v1.0.0-rc.4` SDK. Set all three toolchain variables; the first fetch is
+online. This pre-release repository state intentionally carries no demo
+`package.lock`; immutable locks and demo CI follow the package release.
 
 ```text
-cd ../..
-cmake -S . -B build
-cmake --build build -j4
-cd demos/gui-settings
-TOKA_LIB=../../lib TOKA_OFFLINE=1 ../../build/bin/toka build
+export TOKA=/path/to/sdk/bin/toka
+export TOKAC=/path/to/sdk/bin/tokac
+export TOKA_LIB=/path/to/sdk/lib
+$TOKA fetch
+$TOKA build
 ./target/debug/gui_settings_demo
 ```
 
