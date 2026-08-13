@@ -7,8 +7,15 @@ Delete at extended-grapheme boundaries. Composition updates are deliberately
 ignored; there is no native text-field widget, selection highlight, mouse
 placement, IME editing state, shaping, bidi layout, or multiline layout.
 
-Run from this directory after building Toka from this source tree:
+After `gui@0.1.0` is live in the public catalog, run from this directory with
+an installed Toka `v1.0.0-rc.4` SDK. Set all three toolchain variables; the
+first fetch is online. This pre-release repository state intentionally carries
+no demo `package.lock`; immutable locks and demo CI follow the package release.
 
 ```text
-TOKA_LIB=../../lib TOKAC=../../build/bin/tokac ../../build/bin/toka run
+export TOKA=/path/to/sdk/bin/toka
+export TOKAC=/path/to/sdk/bin/tokac
+export TOKA_LIB=/path/to/sdk/lib
+$TOKA fetch
+$TOKA run
 ```
