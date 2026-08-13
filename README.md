@@ -17,18 +17,19 @@ owns the package sources, native bridge, package example, qualification tests,
 and the imported editor and settings demos under `demos/`. Product-level
 patches remain outside this repository. The deterministic release archive
 contains only the package allowlist and deliberately excludes the demos. The
-demos select `gui@0.1.0`; they are not executable during release preparation.
-Their immutable locks and CI qualification are added only after the package is
-live in the public catalog.
+demos select the public `gui@0.1.0` release and commit identical immutable GUI
+and Unicode locks. Their macOS CI builds once from an empty online cache and
+again offline from only the two locked archives without opening a window.
 
 The package history was imported with
 `git subtree split --prefix=official/gui` from
 [`tokalang/toka@490068c9`](https://github.com/tokalang/toka/tree/490068c96ba5412456215a70373f31a6cb1e2048/official/gui).
-The imported Toka snapshot remains the authoritative source until the
-standalone `0.1.0` release and public registry consumer replay are complete.
-Cutover is one-way: the compiler-repository copy will then be removed rather
-than maintained as a mirror or submodule. The package locks its Unicode text
-dependency to the independently released registry package `unicode@0.1.1`.
+This repository is the canonical source for the standalone `0.1.0` release,
+which is live in the public registry and selected by the locked demos.
+The Toka compiler-repository copy remains until the external demo and public
+consumer gates pass; cutover will then remove it rather than maintain a mirror
+or submodule. The package locks its Unicode text dependency to the independently
+released registry package `unicode@0.1.1`.
 
 ## Guarantees
 
