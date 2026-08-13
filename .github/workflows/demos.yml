@@ -1,0 +1,119 @@
+name: GUI demo registry qualification
+
+on:
+  pull_request:
+    paths:
+      - "demos/**"
+      - ".github/workflows/demos.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "demos/**"
+      - ".github/workflows/demos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TOKA_VERSION: v1.0.0-rc.4
+  TOKA_ASSET: toka-v1.0.0-rc.4-macos-arm64.tar.gz
+  TOKA_ASSET_SHA256: f5e9043af6f650bca42e95d22fda28c6814413faa4bf9478decfeb884d4d0866
+  GUI_ARCHIVE_SHA256: b17fb7d4ce6bcb8c3a533216e40ca2c63ab95e0263ceffac8e2636d2f97ce85d
+  UNICODE_ARCHIVE_SHA256: c68569e6efbd9eb9bf85226eca68de3a0187d4300e320aeb13857be73b5ad28a
+  TOKA_REGISTRY_URL: https://pkg.tokalang.dev
+
+jobs:
+  qualify:
+    name: Registry build (${{ matrix.demo }})
+    runs-on: macos-15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - demo: gui-editor
+            binary: gui_editor_demo
+          - demo: gui-settings
+            binary: gui_settings_demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install runtime dependencies
+        run: brew install lld@20 zstd openssl@3
+
+      - name: Install locked Toka SDK
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/$TOKA_ASSET"
+          curl --fail --location --retry 3 --output "$archive" \
+            "https://github.com/tokalang/toka/releases/download/$TOKA_VERSION/$TOKA_ASSET"
+          echo "$TOKA_ASSET_SHA256  $archive" | shasum -a 256 --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          sdk="$RUNNER_TEMP/${TOKA_ASSET%.tar.gz}"
+          test -x "$sdk/bin/toka"
+          test -x "$sdk/bin/tokac"
+          test -f "$sdk/lib/sys/toka_rt.o"
+          "$sdk/bin/toka" --version | grep -F '1.0.0-rc.4'
+          "$sdk/bin/tokac" --version | grep -F '1.0.0-rc.4'
+          echo "TOKA=$sdk/bin/toka" >> "$GITHUB_ENV"
+          echo "TOKAC=$sdk/bin/tokac" >> "$GITHUB_ENV"
+          echo "TOKA_LIB=$sdk/lib" >> "$GITHUB_ENV"
+          echo "CC=xcrun --sdk macosx clang" >> "$GITHUB_ENV"
+
+      - name: Online registry build from an empty cache
+        working-directory: demos/${{ matrix.demo }}
+        run: |
+          set -euo pipefail
+          cp package.lock "$RUNNER_TEMP/${{ matrix.demo }}.package.lock"
+          rm -rf target .toka .toka_build_exe
+          "$TOKA" fetch
+          cmp package.lock "$RUNNER_TEMP/${{ matrix.demo }}.package.lock"
+          echo "$GUI_ARCHIVE_SHA256  .toka/cache/archives/$GUI_ARCHIVE_SHA256.tar.gz" | shasum -a 256 --check
+          echo "$UNICODE_ARCHIVE_SHA256  .toka/cache/archives/$UNICODE_ARCHIVE_SHA256.tar.gz" | shasum -a 256 --check
+          test "$(find .toka/cache/archives -type f | wc -l | tr -d ' ')" = 2
+          test -f .toka/packages/gui-0.1.0/native/toka_gui.m
+          test -f .toka/packages/unicode-0.1.1/lib/official/unicode.tk
+          "$TOKA" build
+          cmp package.lock "$RUNNER_TEMP/${{ matrix.demo }}.package.lock"
+          test -x "target/debug/${{ matrix.binary }}"
+          test -n "$(find .toka/build/native -type f -name 'toka_gui-*.o' -print -quit)"
+          otool -L "target/debug/${{ matrix.binary }}" | grep -F 'AppKit.framework'
+          otool -L "target/debug/${{ matrix.binary }}" | grep -F 'Metal.framework'
+          otool -L "target/debug/${{ matrix.binary }}" | grep -F 'QuartzCore.framework'
+
+      - name: Strict archive-only offline rebuild
+        working-directory: demos/${{ matrix.demo }}
+        run: |
+          set -euo pipefail
+          archive_cache="$RUNNER_TEMP/${{ matrix.demo }}-archives"
+          mkdir "$archive_cache"
+          cp ".toka/cache/archives/$GUI_ARCHIVE_SHA256.tar.gz" "$archive_cache/"
+          cp ".toka/cache/archives/$UNICODE_ARCHIVE_SHA256.tar.gz" "$archive_cache/"
+          rm -rf target .toka .toka_build_exe
+          mkdir -p .toka/cache/archives
+          cp "$archive_cache/"*.tar.gz .toka/cache/archives/
+          test ! -e target
+          test ! -e .toka/packages
+          test ! -e .toka/build
+          test ! -e .toka_build_exe
+          test "$(find .toka -type f | wc -l | tr -d ' ')" = 2
+          echo "$GUI_ARCHIVE_SHA256  .toka/cache/archives/$GUI_ARCHIVE_SHA256.tar.gz" | shasum -a 256 --check
+          echo "$UNICODE_ARCHIVE_SHA256  .toka/cache/archives/$UNICODE_ARCHIVE_SHA256.tar.gz" | shasum -a 256 --check
+          TOKA_OFFLINE=1 "$TOKA" fetch
+          cmp package.lock "$RUNNER_TEMP/${{ matrix.demo }}.package.lock"
+          test -f .toka/packages/gui-0.1.0/native/toka_gui.m
+          test -f .toka/packages/unicode-0.1.1/lib/official/unicode.tk
+          test ! -e .toka/build/native
+          TOKA_OFFLINE=1 "$TOKA" build
+          cmp package.lock "$RUNNER_TEMP/${{ matrix.demo }}.package.lock"
+          test -x "target/debug/${{ matrix.binary }}"
+          test -n "$(find .toka/build/native -type f -name 'toka_gui-*.o' -print -quit)"
+          otool -L "target/debug/${{ matrix.binary }}" | grep -F 'AppKit.framework'
+          otool -L "target/debug/${{ matrix.binary }}" | grep -F 'Metal.framework'
+          otool -L "target/debug/${{ matrix.binary }}" | grep -F 'QuartzCore.framework'
