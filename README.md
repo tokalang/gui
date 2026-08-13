@@ -26,10 +26,13 @@ The package history was imported with
 [`tokalang/toka@490068c9`](https://github.com/tokalang/toka/tree/490068c96ba5412456215a70373f31a6cb1e2048/official/gui).
 This repository is the canonical source for the standalone `0.1.0` release,
 which is live in the public registry and selected by the locked demos.
-The Toka compiler-repository copy remains until the external demo and public
-consumer gates pass; cutover will then remove it rather than maintain a mirror
-or submodule. The package locks its Unicode text dependency to the independently
-released registry package `unicode@0.1.1`.
+The standalone release, public catalog, locked demo, and public consumer gates
+are complete. Toka [PR #27](https://github.com/tokalang/toka/pull/27) removed
+the compiler-repository copy at
+[`c1c1a6c`](https://github.com/tokalang/toka/commit/c1c1a6c61f440bf9c6ffd7ed9533072e7868bc54);
+this repository is the sole canonical source rather than a mirror or submodule.
+The package locks its Unicode text dependency to the independently released
+registry package `unicode@0.1.1`.
 
 ## Guarantees
 
